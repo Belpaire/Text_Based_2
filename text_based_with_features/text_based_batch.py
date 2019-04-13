@@ -138,21 +138,13 @@ hot_to_word_dict,word_to_hot_dict= read_my_file(0)
 hot_to_word_dict_answ,word_to_hot_dict_answ= read_my_file(1)
 train_questions= read_my_file_questions("qa.894.raw.train.txt")
 train_answers=read_my_file_answers("qa.894.raw.train.txt")
-test_questions=read_my_file_questions("qa.894.raw.test.txt")[:1000]
-test_answers=read_my_file_answers("qa.894.raw.test.txt") [:1000]
+test_questions=read_my_file_questions("qa.894.raw.test.txt")
+test_answers=read_my_file_answers("qa.894.raw.test.txt")
 n_in=len(train_questions)
 n_in_2=len(test_questions)
 vocnbq=len(word_to_hot_dict)
 vocnba=len(word_to_hot_dict_answ)
 feat=read_features()
-
-train_question_feat=[ np.array(feat[line[-2]]) for line in train_questions]
-test_question_feat=[ np.array(feat[line[-2]]) for line in test_questions]
-
-del feat
-
-train_question_feat=flatten_feats(train_question_feat)
-test_question_feat=flatten_feats(test_question_feat)
 
 maxlenquest= max([len(seq) for seq in train_questions+test_questions])
 maxlenanswer= max([len(seq) for seq in train_answers+test_answers])
@@ -205,14 +197,30 @@ class NetworkModel:
 model = NetworkModel.build_model(100)
 model.compile(optimizer='adam',  loss={'DecoderOutput': 'categorical_crossentropy', 'AnswerOutput': 'binary_crossentropy'},
               loss_weights={'DecoderOutput': 1., 'AnswerOutput': 5.}, metrics=['accuracy'])
+def generator_train(batch_size):
+    train_question_feat = [np.array(feat[line[-2]]) for line in train_questions]
+    #test_question_feat = [np.array(feat[line[-2]]) for line in test_questions]
+    train_question_feat = flatten_feats(train_question_feat)
+    #test_question_feat = flatten_feats(test_question_feat)
+    nb_batch=0
+    while True:
+        if nb_batch>len(train_questions)*batch_size:
+            nb_batch=0
+        this_batch=train_questions[nb_batch*batch_size:(1+nb_batch)*batch_size]
+        new_feat=[np.array(feat[line[-2]]) for line in this_batch]
+        yield [this_batch,new_feat]
+
 # fit model
 for i in range(65):
-    model.fit([npquestions,train_question_feat],   {'DecoderOutput': npquestions, 'AnswerOutput': npanswertrain},validation_data=([nptestquest,test_question_feat], {'DecoderOutput': nptestquest, 'AnswerOutput': npanswertest}),verbose=2,epochs=1)
+    batchsize=32
+    epochsteps=n_in//batchsize
+    model.fit_generator(generator_train(batchsize),epochsteps,1)
     print("epoch",i)
     randnb=random.randint(0,n_in_2-10)
     elems=test_questions[randnb:10+randnb]
     answers=test_answers[randnb:10+randnb]
-    test_feat_epoch=test_question_feat[randnb:10+randnb]
+    test_feat_epoch=[np.array(feat[line[-2]]) for line in elems]
+    test_feat_epoch=flatten_feats(test_feat_epoch)
     for linei in range(10):
         print(elems[linei])
         print(answers[linei])
@@ -250,26 +258,26 @@ def questions_to_file(targetfile, questions):
                 f2.write(word)
                 f2.write(" ")
         f2.write("\n")
-(answers,questions)=model.predict([nptestquest,test_question_feat])
-answerwords=[]
-questionwords=[]
-for answer in answers:
-    intermed = [0] * vocnba
-    index = np.argmax(answer)
-    intermed[index] = 1
-    mostlikedanswer = hot_to_word_dict_answ[tuple(intermed)]
-    answerwords.append(mostlikedanswer)
-for question in questions:
-    newquestion=[]
-    for word in question:
-        intermed = [0] * vocnbq
-        index = np.argmax(word)
-        intermed[index] = 1
-        mostlikedword = hot_to_word_dict[tuple(intermed)]
-        newquestion.append(mostlikedword)
-    questionwords.append(newquestion)
-answers_to_file("predictedanswers.txt",answerwords)
-questions_to_file("predictedquestions.txt",questionwords)
+# (answers,questions)=model.predict([nptestquest,test_question_feat])
+# answerwords=[]
+# questionwords=[]
+# for answer in answers:
+#     intermed = [0] * vocnba
+#     index = np.argmax(answer)
+#     intermed[index] = 1
+#     mostlikedanswer = hot_to_word_dict_answ[tuple(intermed)]
+#     answerwords.append(mostlikedanswer)
+# for question in questions:
+#     newquestion=[]
+#     for word in question:
+#         intermed = [0] * vocnbq
+#         index = np.argmax(word)
+#         intermed[index] = 1
+#         mostlikedword = hot_to_word_dict[tuple(intermed)]
+#         newquestion.append(mostlikedword)
+#     questionwords.append(newquestion)
+# answers_to_file("predictedanswers.txt",answerwords)
+# questions_to_file("predictedquestions.txt",questionwords)
 # import os
 # os.environ["PATH"] += os.pathsep + 'C:\\graphviz\\release\\bin'
 # plot_model(model, show_shapes=True, to_file='reconstruct_lstm_autoencoder.png')
