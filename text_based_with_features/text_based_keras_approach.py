@@ -138,8 +138,8 @@ hot_to_word_dict,word_to_hot_dict= read_my_file(0)
 hot_to_word_dict_answ,word_to_hot_dict_answ= read_my_file(1)
 train_questions= read_my_file_questions("qa.894.raw.train.txt")
 train_answers=read_my_file_answers("qa.894.raw.train.txt")
-test_questions=read_my_file_questions("qa.894.raw.test.txt")
-test_answers=read_my_file_answers("qa.894.raw.test.txt") 
+test_questions=read_my_file_questions("qa.894.raw.test.txt")[:100]
+test_answers=read_my_file_answers("qa.894.raw.test.txt") [:100]
 n_in=len(train_questions)
 n_in_2=len(test_questions)
 vocnbq=len(word_to_hot_dict)
@@ -149,8 +149,11 @@ feat=read_features()
 train_question_feat=[ np.array(feat[line[-2]]) for line in train_questions]
 test_question_feat=[ np.array(feat[line[-2]]) for line in test_questions]
 
+del feat
+
 train_question_feat=flatten_feats(train_question_feat)
 test_question_feat=flatten_feats(test_question_feat)
+
 
 maxlenquest= max([len(seq) for seq in train_questions+test_questions])
 maxlenanswer= max([len(seq) for seq in train_answers+test_answers])
@@ -184,7 +187,7 @@ class Decoder:
 class Answer:
     @staticmethod
     def build_answer(encoder,hiddenlayers,inputs2):
-        next=LSTM(80) (inputs2)
+        next=(inputs2)
         answer = LSTM(hiddenlayers, activation='relu')(encoder)
         answer= concatenate([answer,next])
         answer= Dense(vocnba) (answer)
@@ -210,26 +213,28 @@ for i in range(65):
     randnb=random.randint(0,len(test_questions)-10)
     elems=test_questions[randnb:10+randnb]
     answers=test_answers[randnb:10+randnb]
-    # for linei in range(10):
-    #     print(elems[linei])
-    #     print(answers[linei])
-    #     line=padding(elems[linei], maxlenquest)
-    #     hots=np.array([ word_to_hot_dict[word] for word in line])
-    #     hots=np.reshape(hots,(1,maxlenquest,vocnbq))
-    #     (answer,question)=model.predict(hots)
-    #     total=[]
-    #     allanswers=[]
-    #     for hot in question[0]:
-    #         intermed = [0] * vocnbq
-    #         index = np.argmax(hot)
-    #         intermed[index] = 1
-    #         total.append(hot_to_word_dict[tuple(intermed)])
-    #     intermed = [0] * vocnba
-    #     index = np.argmax(answer)
-    #     intermed[index] = 1
-    #     mostlikedanswer=hot_to_word_dict_answ[tuple(intermed)]
-    #     print(list(filter(lambda x: x!="PADDING",total)))
-    #     print(mostlikedanswer)
+    test_feat_epoch=test_question_feat[randnb:10+randnb]
+
+    for linei in range(10):
+        print(elems[linei])
+        print(answers[linei])
+        line=padding(elems[linei], maxlenquest)
+        hots=np.array([ word_to_hot_dict[word] for word in line])
+        hots=np.reshape(hots,(1,maxlenquest,vocnbq))
+        (answer,question)=model.predict([hots,test_feat_epoch])
+        total=[]
+        allanswers=[]
+        for hot in question[0]:
+            intermed = [0] * vocnbq
+            index = np.argmax(hot)
+            intermed[index] = 1
+            total.append(hot_to_word_dict[tuple(intermed)])
+        intermed = [0] * vocnba
+        index = np.argmax(answer)
+        intermed[index] = 1
+        mostlikedanswer=hot_to_word_dict_answ[tuple(intermed)]
+        print(list(filter(lambda x: x!="PADDING",total)))
+        print(mostlikedanswer)
 
 
 def answers_to_file(targetfile,answers):
@@ -247,7 +252,7 @@ def questions_to_file(targetfile, questions):
                 f2.write(word)
                 f2.write(" ")
         f2.write("\n")
-(answers,questions)=model.predict(nptestquest)
+(answers,questions)=model.predict([nptestquest,test_question_feat])
 answerwords=[]
 questionwords=[]
 for answer in answers:
