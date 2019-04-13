@@ -198,23 +198,23 @@ model = NetworkModel.build_model(100)
 model.compile(optimizer='adam',  loss={'DecoderOutput': 'categorical_crossentropy', 'AnswerOutput': 'binary_crossentropy'},
               loss_weights={'DecoderOutput': 1., 'AnswerOutput': 5.}, metrics=['accuracy'])
 def generator_train(batch_size):
-    train_question_feat = [np.array(feat[line[-2]]) for line in train_questions]
-    #test_question_feat = [np.array(feat[line[-2]]) for line in test_questions]
-    train_question_feat = flatten_feats(train_question_feat)
-    #test_question_feat = flatten_feats(test_question_feat)
     nb_batch=0
     while True:
-        if nb_batch>len(train_questions)*batch_size:
+        if nb_batch*batch_size>len(train_questions):
             nb_batch=0
         this_batch=train_questions[nb_batch*batch_size:(1+nb_batch)*batch_size]
+        this_answers=npanswertrain[nb_batch*batch_size:(1+nb_batch)*batch_size]
         new_feat=[np.array(feat[line[-2]]) for line in this_batch]
-        yield [this_batch,new_feat]
+        new_feat = flatten_feats(new_feat)
+        this_hots=npquestions[nb_batch*batch_size:(1+nb_batch)*batch_size]
+        nb_batch+=1
+        yield [this_hots, new_feat] , [this_answers,this_hots]
 
 # fit model
 for i in range(65):
-    batchsize=32
+    batchsize=45
     epochsteps=n_in//batchsize
-    model.fit_generator(generator_train(batchsize),epochsteps,1)
+    model.fit_generator(generator_train(batchsize),1,1)
     print("epoch",i)
     randnb=random.randint(0,n_in_2-10)
     elems=test_questions[randnb:10+randnb]
