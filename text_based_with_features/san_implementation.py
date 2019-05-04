@@ -3,6 +3,7 @@ import numpy as np
 import keras
 from random import shuffle
 import json
+import tensorflow as tf
 from functools import reduce
 from keras.layers import concatenate
 from keras.models import Model
@@ -14,13 +15,21 @@ from keras.layers import Dense
 from keras.layers import RepeatVector
 from keras.layers import TimeDistributed
 from keras.layers import Flatten
+from keras.layers import Conv1D
+from keras.layers import Conv2D
 from keras.layers import GRU
+from keras.layers import Embedding
 from keras.layers import Dropout
+from keras.layers import Bidirectional
+from keras.layers import MaxPooling2D,MaxPooling1D
 from keras.utils import plot_model
+from keras.layers import add
 import matplotlib.pyplot as plt
 import sklearn as sk
 import random
-
+from keras.layers import Lambda
+from keras.layers.core import Reshape
+from keras import backend as K
 #blacklist=["in","the","is","are","at","of"]
 blacklist=[]
 
@@ -151,7 +160,6 @@ n_in=len(train_questions)
 n_in_2=len(test_questions)
 vocnbq=len(word_to_hot_dict)
 vocnba=len(word_to_hot_dict_answ)
-feat=read_features()
 tupList=create_tuple_quest_answer(train_questions,train_answers)
 maxlenquest= max([len(seq) for seq in train_questions+test_questions])
 maxlenanswer= max([len(seq) for seq in train_answers+test_answers])
@@ -159,53 +167,69 @@ npquestions=to_npquest(train_questions,maxlenquest,word_to_hot_dict)
 nptestquest=to_npquest(test_questions,maxlenquest,word_to_hot_dict)
 npanswertrain=to_npanswer(train_answers,word_to_hot_dict_answ,vocnba)
 npanswertest=to_npanswer(test_answers,word_to_hot_dict_answ,vocnba)
-
-
-# define input sequence
-# reshape input into [samples, timesteps, features]
-
-# define model
-npquestions=np.reshape(npquestions,(n_in, maxlenquest, vocnbq))
-nptestquest=np.reshape(nptestquest,(n_in_2, maxlenquest, vocnbq))
-
 class Encoder:
     @staticmethod
-    def build_encoder(hiddenlayers,inputs):
-        encoder1= GRU(hiddenlayers, activation='relu') (inputs)
+    def build_encoder(hiddenlayers,inputs,img_feat):
+        img_feat=Flatten() (img_feat)
+        img_feat=Dense(5,activation="relu") (img_feat)
+        img_feat=RepeatVector(maxlenquest) (img_feat)
+        encoder1= GRU(hiddenlayers, activation='relu')  (inputs)
         encoder2=RepeatVector(maxlenquest) (encoder1)
+        encoder2=concatenate([encoder2,img_feat])
         return encoder2
 
 class Decoder:
     @staticmethod
     def build_decoder(encoder,hiddenlayers):
-        decoder= GRU(hiddenlayers,return_sequences=True, activation='relu') (encoder)
+        decoder= GRU(hiddenlayers,return_sequences=True, activation='relu')  (encoder)
         decoder=TimeDistributed(Dense(vocnbq))(decoder)
         decoderoutput= (Activation("softmax",name="DecoderOutput")) (decoder)
         return decoderoutput
+class Attention:
+    @staticmethod
+    def build_attention(u, imginput,nb,hiddenlayers):
+        hi=(imginput)
+        hi=Dense(512) (hi)
+        hq=Dense(512) (u)
+        hq=RepeatVector(196) (hq)
+        added=Lambda(lambda x : x[0]+x[1],name="sumlaminputs" +str(nb))([hi,hq])
+        added=Activation("tanh") (added)
+        added=Dropout(0.5) (added)
+        added=Dense(1)(added)
+        pi=Activation("softmax") (added)
+        v_attention=Lambda(lambda x: x[0]*x[1],name="addlammult"+str(nb))([pi,imginput])
+        v_attention=Lambda(lambda x:K.sum(x,axis=1),name="sumlamupdate"+str(nb)) (v_attention)
+        u=Lambda(lambda x : x[0]+x[1] )([v_attention,u])
+        return u
 class Answer:
     @staticmethod
-    def build_answer(inputs,hiddenlayers,inputs2):
-        answer = GRU(hiddenlayers, activation='relu') (inputs)
-        answer = RepeatVector(196) (answer)
-        answer = concatenate([answer, inputs2])
-        answer= Dense(512, activation='tanh') (answer)
-        answer=Flatten() (answer)
-        answer = Dense(vocnba)(answer)
+    def build_answer(inputs,hiddenlayers):
+        u=LSTM(hiddenlayers,activation="relu") (inputs)
+        answer=Dense(vocnba) (u)
         answeroutput = (Activation("softmax", name="AnswerOutput"))(answer)
         return answeroutput
 class NetworkModel:
     @staticmethod
     def build_model(hiddenlayers):
         inputs = Input(shape=(maxlenquest,vocnbq), name="input")
-        inputs2= Input(shape=(196,512),name="feat")
-        encoder= Encoder.build_encoder(hiddenlayers,inputs)
-        answer=Answer.build_answer(encoder,hiddenlayers,inputs2)
+        inputs2= Input(shape=(14,14,512),name="feat")
+        encoder= Encoder.build_encoder(hiddenlayers,inputs,inputs2)
+        answer=Answer.build_answer(encoder,hiddenlayers)
         decoder=Decoder.build_decoder(encoder,hiddenlayers)
         model = Model(inputs=[inputs,inputs2], outputs=[answer, decoder])
         return model
 model = NetworkModel.build_model(100)
 model.compile(optimizer='adam',  loss={'DecoderOutput': 'categorical_crossentropy', 'AnswerOutput': 'binary_crossentropy'},
-              loss_weights={'DecoderOutput': 1.3, 'AnswerOutput': .1}, metrics=['accuracy'])
+              loss_weights={'DecoderOutput': 1., 'AnswerOutput': 1.}, metrics=['accuracy'])
+print(model.summary())
+# define input sequence
+# reshape input into [samples, timesteps, features]
+feat=read_features()
+# define model
+npquestions=np.reshape(npquestions,(n_in, maxlenquest, vocnbq))
+nptestquest=np.reshape(nptestquest,(n_in_2, maxlenquest, vocnbq))
+
+
 def generator_train(batch_size,train_questions,train_answers,npquestions,npanswertrain):
     nb_internal=0
     nb_this_it=0
@@ -229,7 +253,7 @@ def generator_train(batch_size,train_questions,train_answers,npquestions,npanswe
             this_it=train_questions[nb_internal]
             this_answer=input_npanswertrain[nb_internal]
             this_feat=[np.array(feat[this_it[-2]])  ]
-            this_feat = flatten_feats(this_feat)
+            #this_feat = flatten_feats(this_feat)
             this_hots=input_npquestions[nb_internal]
             nb_this_it+=1
             nb_internal+=1
@@ -243,16 +267,17 @@ def generator_train(batch_size,train_questions,train_answers,npquestions,npanswe
         yield [new_hots, new_feat] , [new_answers,new_hots]
 
 # fit model
-for i in range(70):
+import math
+for i in range(150):
     batchsize=31
-    epochsteps=n_in//batchsize
+    epochsteps=int(math.ceil(n_in/batchsize))
     model.fit_generator(generator_train(batchsize,train_questions,train_answers,npquestions,npanswertrain),epochsteps,1)
     print("epoch",i)
     randnb=random.randint(0,n_in_2-10)
     elems=test_questions[randnb:10+randnb]
     answers=test_answers[randnb:10+randnb]
-    test_feat_epoch=[np.array(feat[line[-2]]) for line in elems]
-    test_feat_epoch=flatten_feats(test_feat_epoch)
+    test_feat_epoch=np.array([np.array(feat[line[-2]]) for line in elems])
+    #test_feat_epoch=flatten_feats(test_feat_epoch)
     for linei in range(10):
         print(elems[linei])
         print(answers[linei])
@@ -297,8 +322,8 @@ def generator_test(batch_size):
             nb_batch = 0
         this_batch = test_questions[nb_batch * batch_size:(1 + nb_batch) * batch_size]
         this_answers = npanswertest[nb_batch * batch_size:(1 + nb_batch) * batch_size]
-        new_feat = [np.array(feat[line[-2]]) for line in this_batch]
-        new_feat = flatten_feats(new_feat)
+        new_feat = np.array([np.array(feat[line[-2]]) for line in this_batch])
+        #new_feat = flatten_feats(new_feat)
         this_hots = nptestquest[nb_batch * batch_size:(1 + nb_batch) * batch_size]
         nb_batch += 1
         yield [this_hots, new_feat]
