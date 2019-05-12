@@ -23,6 +23,8 @@ from keras.layers import Embedding
 from keras.layers import Dropout
 from keras.layers import Bidirectional
 from keras.layers import MaxPooling2D
+from keras.layers import  ZeroPadding2D
+from keras.layers import Convolution2D
 from keras.utils import plot_model
 from keras.layers import add
 import matplotlib.pyplot as plt
@@ -260,6 +262,15 @@ if __name__ == '__main__':
     class Answer:
         @staticmethod
         def build_answer(inputs,hiddenlayers,img_feat):
+            img_feat=(ZeroPadding2D((1, 1))) (img_feat)
+            img_feat =    (Convolution2D(512, 3, 3, activation='relu')) ( img_feat)
+            img_feat =           (ZeroPadding2D((1, 1))) (img_feat)
+            img_feat =   (Convolution2D(512, 3, 3, activation='relu')) (img_feat)
+            img_feat =  (ZeroPadding2D((1, 1))) (img_feat)
+            img_feat = (Convolution2D(512, 3, 3, activation='relu')) (img_feat)
+            img_feat = (ZeroPadding2D((1, 1))) (img_feat)
+            img_feat = (Convolution2D(512, 3, 3, activation='relu')) (img_feat)
+            img_feat = (MaxPooling2D((2, 2), strides=(2, 2))) (img_feat)
             img_feat= Dense(hiddenlayers,activation='tanh') (img_feat)
             u=Embedding(vocnbq + 1,
                       EMBEDDING_DIM300,
@@ -283,7 +294,7 @@ if __name__ == '__main__':
             decoder=Decoder.build_decoder(encoder,hiddenlayers)
             model = Model(inputs=[inputs,inputs2], outputs=[answer, decoder])
             return model
-    model = NetworkModel.build_model(512)
+    model = NetworkModel.build_model(300)
     model.compile(optimizer='adam',  loss={'DecoderOutput': 'categorical_crossentropy', 'AnswerOutput': 'binary_crossentropy'},
                   loss_weights={'DecoderOutput': 1., 'AnswerOutput': 100.}, metrics=['accuracy'])
     print(model.summary())
@@ -338,7 +349,7 @@ if __name__ == '__main__':
 
     # fit model
     import math
-    for i in range(250):
+    for i in range(150):
         batchsize=31
         epochsteps=int(math.ceil(n_in/batchsize))
         model.fit_generator(generator_train(batchsize,train_questions,train_answers,npquestions,npanswertrain),epochsteps,1)

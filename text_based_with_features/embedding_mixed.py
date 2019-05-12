@@ -224,8 +224,8 @@ if __name__ == '__main__':
         @staticmethod
         def build_encoder(hiddenlayers,inputs):
             embed=Embedding(vocnbq + 1,
-                      EMBEDDING_DIM100,
-                      weights=[embedding_matrix100],
+                      EMBEDDING_DIM300,
+                      weights=[embedding_matrix300],
                       input_length=maxlenquest) (inputs)
             encoder= GRU(hiddenlayers)  (embed)
             return encoder
@@ -261,11 +261,12 @@ if __name__ == '__main__':
         @staticmethod
         def build_answer(inputs,hiddenlayers,img_feat):
             img_feat= Dense(hiddenlayers,activation='tanh') (img_feat)
-            u=Embedding(vocnbq + 1,
-                      EMBEDDING_DIM300,
-                      weights=[embedding_matrix300],
-                      input_length=maxlenquest) (inputs)
-            u=LSTM(hiddenlayers) (u)
+            u=inputs
+            # u=Embedding(vocnbq + 1,
+            #           EMBEDDING_DIM300,
+            #           weights=[embedding_matrix300],
+            #           input_length=maxlenquest) (inputs)
+            # u=LSTM(hiddenlayers) (u)
             for i in range(2):
                 u=Attention.build_attention(u,img_feat,i,hiddenlayers)
             answer=Dropout(0.5) (u)
@@ -279,11 +280,11 @@ if __name__ == '__main__':
             inputs = Input(shape=(maxlenquest,), name="input")
             inputs2= Input(shape=(196,512),name="feat")
             encoder= Encoder.build_encoder(hiddenlayers,inputs)
-            answer=Answer.build_answer(inputs,hiddenlayers,inputs2)
+            answer=Answer.build_answer(encoder,hiddenlayers,inputs2)
             decoder=Decoder.build_decoder(encoder,hiddenlayers)
             model = Model(inputs=[inputs,inputs2], outputs=[answer, decoder])
             return model
-    model = NetworkModel.build_model(512)
+    model = NetworkModel.build_model(300)
     model.compile(optimizer='adam',  loss={'DecoderOutput': 'categorical_crossentropy', 'AnswerOutput': 'binary_crossentropy'},
                   loss_weights={'DecoderOutput': 1., 'AnswerOutput': 100.}, metrics=['accuracy'])
     print(model.summary())
@@ -338,7 +339,7 @@ if __name__ == '__main__':
 
     # fit model
     import math
-    for i in range(250):
+    for i in range(225):
         batchsize=31
         epochsteps=int(math.ceil(n_in/batchsize))
         model.fit_generator(generator_train(batchsize,train_questions,train_answers,npquestions,npanswertrain),epochsteps,1)
