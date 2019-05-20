@@ -227,14 +227,14 @@ if __name__ == '__main__':
                       EMBEDDING_DIM100,
                       weights=[embedding_matrix100],
                       input_length=maxlenquest) (inputs)
-            encoder= GRU(hiddenlayers)  (embed)
+            encoder= Bidirectional(LSTM(hiddenlayers),merge_mode='sum')  (embed)
             return encoder
 
     class Decoder:
         @staticmethod
         def build_decoder(encoder,hiddenlayers):
             encoder=RepeatVector(maxlenquest) (encoder)
-            decoder= GRU(hiddenlayers,return_sequences=True)  (encoder)
+            decoder= Bidirectional(LSTM(hiddenlayers,return_sequences=True),merge_mode='sum')  (encoder)
             decoder=TimeDistributed(Dense(vocnbq))(decoder)
             decoderoutput= (Activation("softmax",name="DecoderOutput")) (decoder)
             return decoderoutput
@@ -265,7 +265,7 @@ if __name__ == '__main__':
                       EMBEDDING_DIM300,
                       weights=[embedding_matrix300],
                       input_length=maxlenquest) (inputs)
-            u=LSTM(hiddenlayers) (u)
+            u=Bidirectional(LSTM(hiddenlayers),merge_mode='sum') (u)
             for i in range(2):
                 u=Attention.build_attention(u,img_feat,i,hiddenlayers)
             answer=Dropout(0.5) (u)
@@ -338,7 +338,7 @@ if __name__ == '__main__':
 
     # fit model
     import math
-    for i in range(250):
+    for i in range(150):
         batchsize=31
         epochsteps=int(math.ceil(n_in/batchsize))
         model.fit_generator(generator_train(batchsize,train_questions,train_answers,npquestions,npanswertrain),epochsteps,1)
@@ -430,4 +430,4 @@ if __name__ == '__main__':
     answers_to_file("predictedanswers.txt",answerwords)
     questions_to_file("predictedquestions.txt",questionwords)
 
-    model.save("my_model.h5")
+    model.save("my_modelbidir.h5")

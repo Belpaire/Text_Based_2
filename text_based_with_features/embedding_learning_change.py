@@ -9,13 +9,13 @@ from functools import reduce
 from keras.layers import concatenate
 from keras.models import Model
 from keras.models import Sequential
-from keras.optimizers import Adam
 from keras.layers import Input
 from keras.layers import LSTM
 from keras.layers.core import Activation
 from keras.layers import Dense
 from keras.layers import RepeatVector
 from keras.layers import TimeDistributed
+from keras.optimizers  import SGD, Adam
 from keras.layers import Flatten
 from keras.layers import Conv1D
 from keras.layers import Conv2D
@@ -225,17 +225,17 @@ if __name__ == '__main__':
         @staticmethod
         def build_encoder(hiddenlayers,inputs):
             embed=Embedding(vocnbq + 1,
-                      EMBEDDING_DIM300,
-                      weights=[embedding_matrix300],
+                      EMBEDDING_DIM100,
+                      weights=[embedding_matrix100],
                       input_length=maxlenquest) (inputs)
-            encoder= GRU(hiddenlayers)  (embed)
+            encoder= (LSTM(hiddenlayers) ) (embed)
             return encoder
 
     class Decoder:
         @staticmethod
         def build_decoder(encoder,hiddenlayers):
             encoder=RepeatVector(maxlenquest) (encoder)
-            decoder= GRU(hiddenlayers,return_sequences=True)  (encoder)
+            decoder= LSTM(hiddenlayers,return_sequences=True)  (encoder)
             decoder=TimeDistributed(Dense(vocnbq))(decoder)
             decoderoutput= (Activation("softmax",name="DecoderOutput")) (decoder)
             return decoderoutput
@@ -262,7 +262,11 @@ if __name__ == '__main__':
         @staticmethod
         def build_answer(inputs,hiddenlayers,img_feat):
             img_feat= Dense(hiddenlayers,activation='tanh') (img_feat)
-            u=inputs
+            u=Embedding(vocnbq + 1,
+                      EMBEDDING_DIM300,
+                      weights=[embedding_matrix300],
+                      input_length=maxlenquest) (inputs)
+            u=LSTM(hiddenlayers) (u)
             for i in range(2):
                 u=Attention.build_attention(u,img_feat,i,hiddenlayers)
             answer=Dropout(0.5) (u)
@@ -276,13 +280,13 @@ if __name__ == '__main__':
             inputs = Input(shape=(maxlenquest,), name="input")
             inputs2= Input(shape=(196,512),name="feat")
             encoder= Encoder.build_encoder(hiddenlayers,inputs)
-            answer=Answer.build_answer(encoder,hiddenlayers,inputs2)
+            answer=Answer.build_answer(inputs,hiddenlayers,inputs2)
             decoder=Decoder.build_decoder(encoder,hiddenlayers)
             model = Model(inputs=[inputs,inputs2], outputs=[answer, decoder])
             return model
-    optim=Adam(amsgrad=True)
+    newopt=Adam(amsgrad=True)
     model = NetworkModel.build_model(512)
-    model.compile(optimizer='adam',  loss={'DecoderOutput': 'categorical_crossentropy', 'AnswerOutput': 'binary_crossentropy'},
+    model.compile(optimizer='nadam',  loss={'DecoderOutput': 'categorical_crossentropy', 'AnswerOutput': 'binary_crossentropy'},
                   loss_weights={'DecoderOutput': 1., 'AnswerOutput': 100.}, metrics=['accuracy'])
     print(model.summary())
     # define input sequence
@@ -336,7 +340,7 @@ if __name__ == '__main__':
 
     # fit model
     import math
-    for i in range(250):
+    for i in range(150):
         batchsize=31
         epochsteps=int(math.ceil(n_in/batchsize))
         model.fit_generator(generator_train(batchsize,train_questions,train_answers,npquestions,npanswertrain),epochsteps,1)
@@ -428,4 +432,4 @@ if __name__ == '__main__':
     answers_to_file("predictedanswers.txt",answerwords)
     questions_to_file("predictedquestions.txt",questionwords)
 
-    model.save("my_model_amsgrad250.h5")
+    model.save("my_modelnewlearningnadam.h5")

@@ -71,7 +71,6 @@ embeddings_index = {}
 
 feat=read_features("img_features.json")
 
-model = load_model('my_model.h5')
 def calculate_questionacc(fpred,fraw):
     f1=open(fpred)
     f2=open(fraw)
@@ -79,11 +78,15 @@ def calculate_questionacc(fpred,fraw):
     allquestionspred=[]
     for line in f2:
         linetruth=[]
+        line=line.strip()
+        line=line.split()
         for word in line:
             linetruth.append(word)
         allquestionstruth.append(linetruth)
     for line in f1:
         linetruth=[]
+        line = line.strip()
+        line = line.split()
         for word in line:
             linetruth.append(word)
         allquestionspred.append(linetruth)
@@ -103,18 +106,22 @@ def calc_answeracc(fpred,fraw):
     allanswerspred = []
     for line in f2:
         linetruth = []
+        line = line.strip()
+        line=line.replace(","," ")
+        line = line.split()
         for word in line:
             linetruth.append(word)
         allanswerstruth.append(linetruth)
     for line in f1:
         linetruth = []
+        line = line.strip()
+        line = line.split()
         for word in line:
             linetruth.append(word)
         allanswerspred.append(linetruth)
     rightguess=0
-    total=0
+    total=(len(allanswerstruth))
     for answerline in range(len(allanswerstruth)):
-        total+=len(allanswerstruth[answerline])
         if allanswerspred[answerline][0] in allanswerstruth[answerline]:
             rightguess+=1
     return rightguess/total*100
@@ -123,6 +130,7 @@ def calc_answeracc(fpred,fraw):
 
 import sys
 if __name__ == '__main__':
+    model = load_model(sys.argv[2])
     answerwords=[]
     questionwords=[]
     test_questions= read_my_file_questions(sys.argv[1])
@@ -132,8 +140,15 @@ if __name__ == '__main__':
     def generator_test(batch_size):
         nb_batch = 0
         while True:
-            if nb_batch * batch_size > len(test_questions):
-                nb_batch = 0
+            if (nb_batch+1) * batch_size >= len(test_questions):
+                this_batch = test_questions[nb_batch * batch_size:len(test_questions)]
+                this_answers = npanswertest[nb_batch * batch_size:len(test_questions)]
+                new_feat = np.array([np.array(feat[line[-2]]) for line in this_batch])
+                new_feat = flatten_feats(new_feat)
+                this_hots = nptestquest[nb_batch * batch_size:len(test_questions)]
+                this_hots = np.array([[np.argmax(word) for word in line] for line in this_hots])
+                yield [this_hots, new_feat]
+                break
             this_batch = test_questions[nb_batch * batch_size:(1 + nb_batch) * batch_size]
             this_answers = npanswertest[nb_batch * batch_size:(1 + nb_batch) * batch_size]
             new_feat = np.array([np.array(feat[line[-2]]) for line in this_batch])
@@ -142,9 +157,12 @@ if __name__ == '__main__':
             this_hots = np.array([[np.argmax(word) for word in line] for line in this_hots])
             nb_batch += 1
             yield [this_hots, new_feat]
+        yield "end"
     newgen=generator_test(31)
-    for i in range(len(test_questions)//31):
+    while True:
         newbatch=next(newgen)
+        if newbatch=="end":
+            break
         (answers,questions)=model.predict(newbatch)
         for question in questions:
             newquestion = []

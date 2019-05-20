@@ -5,11 +5,15 @@ def calculate_questionacc():
     allquestionspred=[]
     for line in f2:
         linetruth=[]
+        line=line.strip()
+        line=line.split()
         for word in line:
             linetruth.append(word)
         allquestionstruth.append(linetruth)
     for line in f1:
         linetruth=[]
+        line=line.strip()
+        line=line.split()
         for word in line:
             linetruth.append(word)
         allquestionspred.append(linetruth)
@@ -23,25 +27,33 @@ def calculate_questionacc():
                 rightguess+=1
     return rightguess/total*100
 def calc_answeracc():
-    f1 = open("predictedanswers.txt")
+    f1 = open("predictedanswers1.txt")
     f2 = open("rawtestsanswers.txt")
     allanswerstruth = []
     allanswerspred = []
     for line in f2:
         linetruth = []
+        line=line.strip()
+        line=line.replace(","," ")
+        line=line.split()
         for word in line:
             linetruth.append(word)
         allanswerstruth.append(linetruth)
     for line in f1:
         linetruth = []
+        line=line.strip()
+        line=line.replace(","," ")
+        line=line.split()
         for word in line:
             linetruth.append(word)
         allanswerspred.append(linetruth)
     rightguess=0
     total=0
     for answerline in range(len(allanswerstruth)):
-        total+=len(allanswerstruth[answerline])
+        total+=1
         if allanswerspred[answerline][0] in allanswerstruth[answerline]:
+            print(allanswerstruth[answerline])
+            print(allanswerspred[answerline][0])
             rightguess+=1
     return rightguess/total*100
 
